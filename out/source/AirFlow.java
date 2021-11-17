@@ -16,19 +16,21 @@ public class AirFlow extends PApplet {
 
 
 ArrayList<Track> tracks = new ArrayList<Track>();
-int trackcount = 100;
+int trackcount = 150;
+Recording record;
 public void setup() {
     
     background(255);
     frameRate(30);
-    float angle = radians(-30);
-    for (int i = 0; i < 300; i++) {
-        angle += radians(2);
+    float maxangle = radians(150);
+    for (int i = 0; i < trackcount; i++) {
+        float angle = maxangle * PApplet.parseFloat(i)/PApplet.parseFloat(trackcount) + radians(-100);
         // Track track = new Track(width/2, height/2, angle);
         Track track = new Track(-10, -10, angle);
         tracks.add(track);
     }
-
+    record = new Recording();
+    record.start();
 }
 
 int shoottime = 200;
@@ -55,6 +57,7 @@ public void draw() {
         wavecount += 0.5f;
     }
     shootcount += 1;
+    record.control();
 }
 
 class Track {
@@ -64,7 +67,7 @@ class Track {
     float radius;
     float rotation;
 
-    float distbetweenshots = PApplet.parseInt(random(3, 8));
+    float distbetweenshots = PApplet.parseInt(random(10, 20));
     
     public Track(float x, float y, float r){
         loc = new PVector(x, y);
@@ -73,12 +76,19 @@ class Track {
     }
 
     public void shoot() {
+        boolean shootit = true;
         if (segs.size() > 0){
             Segment seg = segs.get(segs.size()-1);
-            PVector lastpt = seg.pts.get(seg.pts.size()-1);
-            if (lastpt.x > distbetweenshots){
+            for (PVector pt : seg.pts){
+                if (pt.x < distbetweenshots){
+                    shootit = false;
+                    break;
+                }  
+            }
+            if (shootit) {
                 shootone();
-            }  
+            }
+            
             distbetweenshots = PApplet.parseInt(random(3, 8));
         } else {
             shootone();
@@ -97,11 +107,10 @@ class Track {
 
     public void shootone(){
         Segment seg = new Segment(loc, rotation);
-        seg.add_translation(new PVector(200, 50));
-        seg.add_translation(new PVector(50, 200));
-        seg.add_translation(new PVector(200, -20));
-        seg.add_translation(new PVector(-30, 400));
-        // seg.add_translation(new PVector(200, 100));
+        seg.add_translation(new PVector(200*2, 50*2));
+        seg.add_translation(new PVector(50*2, 200*2));
+        seg.add_translation(new PVector(200*2, -20*2));
+        seg.add_translation(new PVector(-30*2, 400*2));
         seg.myrotate(rotation);
         segs.add(seg);
     }
@@ -128,16 +137,19 @@ class Segment {
 
 
     int phasecount = 0;
-    float speed = 3;
+    float speed = 3*2;
     int segcount = 5;
     float segsize = 5;
     float rotation;
     float totalphasedist;
+
     public Segment(PVector loc, float r){
         rotation = r;
         this.loc = loc;
         visible = new PVector[segcount];
-        segsize = PApplet.parseInt(random(3, 15));
+        // segcount = int(random(8, 30));
+        segsize = PApplet.parseInt(random(8, 30));
+        segcount = PApplet.parseInt(segsize);
         for (int i = 0; i < visible.length; i++){
             PVector vispt = loc.copy();
             PVector centerdir = PVector.sub(loc, new PVector(0, 0));
@@ -226,12 +238,13 @@ class Segment {
     public void display(){
         if (visible.length > 0){
             float ratio = (totalphasedist - pts.get(0).x) / totalphasedist;
-            if (3 * ratio >= 0){
-                strokeWeight(6 * ratio);
+            float sw = 10;
+            if (sw * ratio >= 0){
+                strokeWeight(sw * ratio);
             } else {
                 strokeWeight(0);
             }
-            
+            // stroke(c);
             noFill();
             beginShape();
             for (int i = 0; i < visible.length; i++){
@@ -244,7 +257,42 @@ class Segment {
     }
 }
 
-  public void settings() {  size(512, 512); }
+class Recording {
+    boolean recording = false;
+    boolean stopped = false;
+    int start_frame;
+    int stop_frame;
+    int frame_rate = 30;
+    int recording_time = 100;
+
+    public Recording() {
+        
+    }
+
+    public void start(){
+        if (recording == false && stopped == false) {
+                recording = true;
+                start_frame = frameCount;
+                stop_frame = start_frame + (frame_rate * recording_time);
+        }
+    }
+
+    public void control(){
+        if (recording) {
+            saveFrame("output/img-####.png");
+            if (stop_frame < frameCount) {
+                stopped = true;
+                recording = false;
+            }
+            print(stop_frame, frameCount, '\n');
+            if (stopped) {
+                println("Finished.");
+                System.exit(0);
+            }
+        }
+    }
+}
+  public void settings() {  size(1080, 1080); }
   static public void main(String[] passedArgs) {
     String[] appletArgs = new String[] { "AirFlow" };
     if (passedArgs != null) {
