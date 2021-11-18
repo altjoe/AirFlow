@@ -1,20 +1,17 @@
 
 ArrayList<Track> tracks = new ArrayList<Track>();
-int trackcount = 150;
 Recording record;
 void setup() {
-    size(1080, 1080);
+    size(512, 512);
     background(255);
     frameRate(30);
-    float maxangle = radians(150);
-    for (int i = 0; i < trackcount; i++) {
-        float angle = maxangle * float(i)/float(trackcount) + radians(-100);
-        // Track track = new Track(width/2, height/2, angle);
-        Track track = new Track(-10, -10, angle);
+
+
+    for (int i = 0; i < 150; i++){
+        Track track = new Track(i*width/100 - 100, height+50, 0);
         tracks.add(track);
     }
-    record = new Recording();
-    record.start();
+    
 }
 
 int shoottime = 200;
@@ -26,22 +23,11 @@ void draw() {
     background(255);
     
     for (Track track : tracks){
-        if (shooton && wavecount < 5){
-            track.shoot();
-        } else if (wavecount > 5) {
-            println(frameCount);
-        }
+        track.shoot();
         track.move();
-        track.deletefinished();
+        // track.deletefinished();
         track.display();
     }
-    if (shootcount > shoottime){
-        shooton = !shooton;
-        shootcount = 0;
-        wavecount += 0.5;
-    }
-    shootcount += 1;
-    record.control();
 }
 
 class Track {
@@ -91,10 +77,12 @@ class Track {
 
     void shootone(){
         Segment seg = new Segment(loc, rotation);
-        seg.add_translation(new PVector(200*2, 50*2));
-        seg.add_translation(new PVector(50*2, 200*2));
-        seg.add_translation(new PVector(200*2, -20*2));
-        seg.add_translation(new PVector(-30*2, 400*2));
+        seg.add_rotation(PI, 100, false);
+        seg.add_rotation(PI, 50, true);
+        seg.add_rotation(PI, 100, false);
+        seg.add_rotation(PI, 100, true);
+        // seg.add_translation(new PVector(50, 0));
+
         seg.myrotate(rotation);
         segs.add(seg);
     }
@@ -121,7 +109,7 @@ class Segment {
 
 
     int phasecount = 0;
-    float speed = 3*2;
+    float speed = 5;
     int segcount = 5;
     float segsize = 5;
     float rotation;
@@ -131,7 +119,7 @@ class Segment {
         rotation = r;
         this.loc = loc;
         visible = new PVector[segcount];
-        // segcount = int(random(8, 30));
+        segcount = int(random(8, 30));
         segsize = int(random(8, 30));
         segcount = int(segsize);
         for (int i = 0; i < visible.length; i++){
@@ -146,7 +134,6 @@ class Segment {
             PVector pt = new PVector(-i * segsize, 0);
             pts.add(pt);
         }
-        add_translation(new PVector(0, 0));
     }
 
     void add_translation(PVector trans){ // phases pvector will need a zero z value 
@@ -156,12 +143,23 @@ class Segment {
     }
 
     // phases pvector x,y will contain pivot pt, z will contain rotation no need to store radius because it will be distance from pviot and offset  
-    void add_rotation(float rotation, float radius, boolean left){ 
-        if (left){
-            phases.add(new PVector(0, radius, rotation));
-        } else {
-            phases.add(new PVector(0, -radius, rotation));
+    void add_rotation(float rotation, float radius, boolean clockwize){ 
+        totalphasedist += abs(radius * rotation);
+        if (clockwize) { 
+            rotation *= -1; 
+        } else { 
+            radius *= -1; 
         }
+
+        PVector pivot = new PVector(0, radius);
+        
+        for (PVector phase : phases){
+            if (phase.z != 0){
+                pivot.rotate(phase.z);
+            }
+            
+        }
+        phases.add(new PVector(pivot.x, pivot.y, rotation));
         phaseids.add(1.0);
     }
 
@@ -173,19 +171,19 @@ class Segment {
 
             PVector vispt = loc.copy();
             float currdist = pt.x;
-            PVector prevphase = new PVector(0,0);
             for (int j = 0; j < phases.size(); j++){
                 PVector phase = phases.get(j);
                 float phaseid = phaseids.get(j);
-
                 if (phaseid == 0){
                     PVector offset = move_translate(currdist, phase);
                     currdist -= offset.mag();
                     vispt = PVector.add(vispt, offset);
                 } else {
-                    // PVector offset = move_rotate(currdist, phase);
+                    PVector offset = move_rotation(currdist, phase);
+                    float radius = new PVector(phase.x, phase.y).mag();
+                    currdist -= abs(radius* phase.z);
+                    vispt = PVector.add(vispt, offset);
                 }
-                prevphase = phase.copy();
             }
             visible[i] = vispt;
         }
@@ -208,7 +206,7 @@ class Segment {
     }   
 
     PVector move_translate(float currdist, PVector phase){
-        if (currdist > phase.mag()){
+        if (currdist >= phase.mag()){
             return phase;
         } else {
             PVector norm = phase.copy();
@@ -216,8 +214,36 @@ class Segment {
             norm.x *= currdist;
             norm.y *= currdist;
             return norm;
-        }
+        } 
     }   
+
+    PVector move_rotation(float currdist, PVector phase){
+        float radius = new PVector(phase.x, phase.y).mag();
+        float totalangle = phase.z;
+        float totalphasedist = abs(radius * totalangle);
+        float currangle = (currdist / totalphasedist) * totalangle;
+        
+        PVector pivot = new PVector(phase.x, phase.y);
+        
+        if (currdist >= totalphasedist) {
+            return mypivot(new PVector(0,0), pivot, totalangle);
+        } else if (currdist > 0){
+            return mypivot(new PVector(0,0), pivot, currangle);
+        }
+        return new PVector(0,0);
+    }
+
+    PVector mypivot(PVector pt, PVector pivot, float angle) {
+        float s = sin(-angle);
+        float c = cos(-angle);
+        pt = PVector.sub(pt, pivot);
+        float x = pt.x * c - pt.y * s;
+        float y = pt.x * s + pt.y * c;
+
+        pt.x = x + pivot.x;
+        pt.y = y + pivot.y;
+        return pt;
+    }  
 
     void display(){
         if (visible.length > 0){
@@ -228,12 +254,13 @@ class Segment {
             } else {
                 strokeWeight(0);
             }
-            // stroke(c);
             noFill();
             beginShape();
             for (int i = 0; i < visible.length; i++){
                 if (pts.get(i).x >= 0){
                     curveVertex(visible[i].x, visible[i].y);
+                    // ellipse(visible[i].x, visible[i].y, 5, 5);
+                    // ellipse(pts.get(i).x, pts.get(i).y, 5, 5);
                 }
             }
             endShape();
