@@ -17,14 +17,15 @@ public class AirFlow extends PApplet {
 
 ArrayList<Track> tracks = new ArrayList<Track>();
 Recording record;
+int tracknum = 500;
 public void setup() {
     
     background(255);
     frameRate(30);
 
 
-    for (int i = 0; i < 150; i++){
-        Track track = new Track(i*width/100 - 100, height+50, 0);
+    for (int i = 0; i < tracknum; i++){
+        Track track = new Track(0, 0, 0);
         tracks.add(track);
     }
     
@@ -34,15 +35,27 @@ int shoottime = 200;
 int shootcount = 0;
 boolean shooton = true;
 float wavecount = 0;
-
+float extradist;
 public void draw() {
     background(255);
-    
-    for (Track track : tracks){
+    translate(width/2, height/2);
+    for (int i = 0; i < tracks.size(); i++){
+        Track track = tracks.get(i);
         track.shoot();
         track.move();
-        // track.deletefinished();
+        track.deletefinished();
+        if (frameCount > 200){
+            track.reversespeed();
+        }
+        float angle = PApplet.parseFloat(i) / PApplet.parseFloat(tracknum);
+        angle *= 2*PI;
+        
+        
+        pushMatrix();
+        rotate(angle);
         track.display();
+        popMatrix();
+        
     }
 }
 
@@ -59,6 +72,12 @@ class Track {
         loc = new PVector(x, y);
         rotation = r;
         shoot();
+    }
+
+    public void reversespeed(){
+        for (Segment seg : segs){
+            seg.speed = 0;
+        }
     }
 
     public void shoot() {
@@ -93,10 +112,12 @@ class Track {
 
     public void shootone(){
         Segment seg = new Segment(loc, rotation);
-        seg.add_rotation(PI, 100, false);
-        seg.add_rotation(PI, 50, true);
-        seg.add_rotation(PI, 100, false);
-        seg.add_rotation(PI, 100, true);
+        float tracksize = PApplet.parseInt(random(1, 200));
+        extradist = tracksize;
+        seg.add_rotation(PI, tracksize, false);
+        // seg.add_rotation(PI, tracksize, true);
+        // seg.add_rotation(PI, tracksize, false);
+        // seg.add_rotation(PI, tracksize, true);
         // seg.add_translation(new PVector(50, 0));
 
         seg.myrotate(rotation);
@@ -135,8 +156,8 @@ class Segment {
         rotation = r;
         this.loc = loc;
         visible = new PVector[segcount];
-        segcount = PApplet.parseInt(random(8, 30));
-        segsize = PApplet.parseInt(random(8, 30));
+        segcount = 50;
+        segsize = PApplet.parseInt(random(3, 10));
         segcount = PApplet.parseInt(segsize);
         for (int i = 0; i < visible.length; i++){
             PVector vispt = loc.copy();
@@ -263,11 +284,14 @@ class Segment {
 
     public void display(){
         if (visible.length > 0){
-            float ratio = (totalphasedist - pts.get(0).x) / totalphasedist;
-            float sw = 10;
-            if (sw * ratio >= 0){
+            float x = pts.get(pts.size()-1).x;
+            // float ratio = (totalphasedist - x) / totalphasedist;
+            float ratio = pts.get(0).x / totalphasedist;
+            float sw = 2;
+            if (sw * ratio >= 0 && x < totalphasedist){
                 strokeWeight(sw * ratio);
             } else {
+                // ratio = pts.get(0).x / totalphasedist;
                 strokeWeight(0);
             }
             noFill();
