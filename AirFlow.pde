@@ -1,25 +1,43 @@
 ArrayList<BlackHole> holes = new ArrayList<BlackHole>();
 ArrayList<BulletLine> lines = new ArrayList<BulletLine>();
+Recording record;
 void setup() {
-    size(512, 512);
+    size(1080, 1080);
     background(255);
 
-    BlackHole hole = new BlackHole(width/3, height/3, 100);
+    BlackHole hole = new BlackHole(width/3, height/3, 200);
     holes.add(hole);
-    hole = new BlackHole(width/3, height*2/3, 50);
+    hole = new BlackHole(width/3, height*2/3, 100);
     holes.add(hole);
-    hole = new BlackHole(width*2/3, height/3, 300);
+    hole = new BlackHole(width*2/3, height/3, 600);
     holes.add(hole);
-    hole = new BlackHole(width*2/3, height*2/3, 200);
+    hole = new BlackHole(width*2/3, height*2/3, 400);
     holes.add(hole);
-    float numlines = 150;
+
+    float numlines = 200;
     for (int i = 0; i < numlines; i++){
-        BulletLine line = new BulletLine(-10, height*i/numlines);
+        BulletLine line = new BulletLine(0, height*i/numlines);
         lines.add(line);
     }
-    
+    record = new Recording();
+    record.start();
 }
 
+void blackholes(int num){
+    for (int i = 1; i <= num; i++){
+        for (int j = 1; j <= num; j++){
+            int range = int(random(1, 5)) * 75;
+            BlackHole hole = new BlackHole(width*i/float(num+1), height*j/float(num+1), range);
+            holes.add(hole);
+        }
+    }
+}
+
+int wavecount = 300;
+int counter = 0;
+boolean shooton = true;
+int numwaves = 2;
+int wave = 0;
 void draw() {
     background(255);
     translate(-width/2, 0);
@@ -29,11 +47,31 @@ void draw() {
     }
 
     for (BulletLine line : lines){
+        if (shooton){
+            line.shoot();
+        }
+        
         line.move();
         line.display();
     }
 
-    
+    if (wavecount < counter){
+        if (shooton){
+            wavecount = 100;
+            shooton = false;
+        } else {
+            wave += 1;
+            // holes.removeAll(holes);
+            // blackholes(int(random(2, 5)));
+            wavecount = 500;
+            if (wave < numwaves){
+                shooton = true;
+            }   
+        }
+        counter = 0;
+    }
+    counter += 1;
+    record.control();
 }
 
 
@@ -41,32 +79,52 @@ class BulletLine {
     ArrayList<Bullet> bullets = new ArrayList<Bullet>();
     PVector loc;
     float beforenext = 5;
+    float framesbeforestart;
+    boolean previouslyoff = false;
     public BulletLine(float x, float y){
+        float distfrommiddle = abs(y - height/2) / (height/2);;
+        framesbeforestart = 240 * distfrommiddle;
         loc = new PVector(x, y);
-        shoot();
+        // shootone();
     }
 
     void shoot(){
-        Bullet bullet = new Bullet(loc.x, loc.y);
-        bullets.add(bullet);
+        if (bullets.size() > 0){
+             Bullet lastbullet = bullets.get(bullets.size()-1);
+            Verlet lastptofbullet = lastbullet.pts.get(lastbullet.pts.size()-1);
+            if (lastptofbullet.curr.x > loc.x + beforenext){
+                shootone();
+                beforenext = int(random(3, 10));
+            }
+        } else if (frameCount > framesbeforestart){
+            shootone();
+        }
+       
+    }
+
+    void setframestostart(){
+        framesbeforestart += frameCount;
     }
 
     void move(){
         for (Bullet bullet : bullets){
             bullet.move();
         }
+    }
 
-        Bullet lastbullet = bullets.get(bullets.size()-1);
-        Verlet lastptofbullet = lastbullet.pts.get(lastbullet.pts.size()-1);
-        if (lastptofbullet.curr.x > loc.x + beforenext){
-            shoot();
-            beforenext = int(random(3, 10));
-        }
+    void shootone() {
+        Bullet bullet = new Bullet(loc.x, loc.y);
+        bullets.add(bullet);
     }
 
     void display(){
-        for (Bullet bullet : bullets){
-            bullet.display();
+        for (int i = bullets.size() -1; i >= 0; i--) {
+            Bullet bullet = bullets.get(i);
+            if (!bullet.finished){
+                bullet.display();
+            } else {
+                bullets.remove(i);
+            }
         }
     }
 }
@@ -75,6 +133,8 @@ class Bullet {
     ArrayList<Verlet> pts = new ArrayList<Verlet>();
     int segsize = 2;
     int numsegs = int(random(5, 25));
+    boolean starting = true;
+    boolean finished = false;
     public Bullet(float x, float y){
         for (int i = 0; i < numsegs; i++){
             Verlet pt = new Verlet(x - segsize*i, y);
@@ -90,21 +150,38 @@ class Bullet {
     }
 
     void display(){
-        float disttraveled = pts.get(0).disttraveled;
-        float ratio = (width - disttraveled) / width;
-        float sw = ratio * 3;
-        if (sw > 0){
-            strokeWeight(sw);
-        } else {
-            strokeWeight(0);
+        Verlet pt1 = pts.get(0);
+        Verlet pt2 = pts.get(pts.size()-1);
+        if (onscreen(pt1.curr) || onscreen(pt2.curr)){
+            starting = false;
+            float ratio = (width - pt1.disttraveled) / width;
+            float sw = ratio * 4;
+            if (sw > 0){
+                strokeWeight(sw);
+            } else {
+                strokeWeight(0);
+            }
+            
+            noFill();
+            beginShape();
+            for (Verlet pt : pts){
+                curveVertex(pt.curr.x, pt.curr.y);
+            }
+            endShape();
+        } else if (!starting){
+            finished = true;
         }
-        
-        noFill();
-        beginShape();
-        for (Verlet pt : pts){
-            curveVertex(pt.curr.x, pt.curr.y);
+    }
+
+    boolean onscreen(PVector loc){
+        PVector addtrans = loc.copy();
+        addtrans.x -= width/2;
+        if (0 < addtrans.x && addtrans.x < width){
+            if (0 < loc.y && loc.y < height){
+                return true;
+            }
         }
-        endShape();
+        return false;
     }
 }
 
@@ -123,6 +200,7 @@ class Verlet {
 
     void move(){
         PVector diff = PVector.sub(curr, prev);
+        
         if (onscreen(curr)){
             disttraveled += diff.mag();
         }
@@ -182,5 +260,42 @@ class BlackHole {
         ellipse(loc.x, loc.y, range*2, range*2);
         fill(0);
         ellipse(loc.x, loc.y, 10, 10);
+    }
+}
+
+
+class Recording {
+    boolean recording = false;
+    boolean stopped = false;
+    int start_frame;
+    int stop_frame;
+    int frame_rate = 30;
+    int recording_time = 250;
+
+    public Recording() {
+        
+    }
+
+    void start(){
+        if (recording == false && stopped == false) {
+                recording = true;
+                start_frame = frameCount;
+                stop_frame = start_frame + (frame_rate * recording_time);
+        }
+    }
+
+    void control(){
+        if (recording) {
+            saveFrame("output/img-####.png");
+            if (stop_frame < frameCount) {
+                stopped = true;
+                recording = false;
+            }
+            print(stop_frame, frameCount, '\n');
+            if (stopped) {
+                println("Finished.");
+                System.exit(0);
+            }
+        }
     }
 }
